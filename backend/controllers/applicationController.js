@@ -1,11 +1,10 @@
 import { catchAsyncErrors } from "../middlewares/catchAsyncError.js";
 import ErrorHandler from "../middlewares/error.js";
-import { Application } from "../models/applicationSchema.js"; // Ensure this is the correct import path
+import { Application } from "../models/applicationSchema.js";
 import { Job } from "../models/jobSchema.js";
 import cloudinary from "cloudinary";
-import { sendNotification } from "../utils/notification.js"; // Importing the notification utility
 
-// Existing function to post an application
+// Feature: Post Application
 export const postApplication = catchAsyncErrors(async (req, res, next) => {
   const { role } = req.user;
   if (role === "Employer") {
@@ -24,8 +23,9 @@ export const postApplication = catchAsyncErrors(async (req, res, next) => {
       new ErrorHandler("Invalid file type. Please upload a PNG file.", 400)
     );
   }
-  
-  const cloudinaryResponse = await cloudinary.uploader.upload(resume.tempFilePath);
+  const cloudinaryResponse = await cloudinary.uploader.upload(
+    resume.tempFilePath
+  );
 
   if (!cloudinaryResponse || cloudinaryResponse.error) {
     console.error(
@@ -34,19 +34,15 @@ export const postApplication = catchAsyncErrors(async (req, res, next) => {
     );
     return next(new ErrorHandler("Failed to upload Resume to Cloudinary", 500));
   }
-  
   const { name, email, coverLetter, phone, address, jobId } = req.body;
   const applicantID = {
     user: req.user._id,
     role: "Job Seeker",
   };
-  
   if (!jobId) {
     return next(new ErrorHandler("Job not found!", 404));
   }
-  
   const jobDetails = await Job.findById(jobId);
-  
   if (!jobDetails) {
     return next(new ErrorHandler("Job not found!", 404));
   }
@@ -55,7 +51,6 @@ export const postApplication = catchAsyncErrors(async (req, res, next) => {
     user: jobDetails.postedBy,
     role: "Employer",
   };
-  
   if (
     !name ||
     !email ||
@@ -68,7 +63,6 @@ export const postApplication = catchAsyncErrors(async (req, res, next) => {
   ) {
     return next(new ErrorHandler("Please fill all fields.", 400));
   }
-  
   const application = await Application.create({
     name,
     email,
@@ -82,10 +76,6 @@ export const postApplication = catchAsyncErrors(async (req, res, next) => {
       url: cloudinaryResponse.secure_url,
     },
   });
-
-  // Send notification to the employer about the new application
-  await sendNotification(jobDetails.postedBy, `New application received for ${jobDetails.title}`);
-
   res.status(200).json({
     success: true,
     message: "Application Submitted!",
@@ -93,160 +83,139 @@ export const postApplication = catchAsyncErrors(async (req, res, next) => {
   });
 });
 
-// Existing function for employers to get all applications
-export const employerGetAllApplications = catchAsyncErrors(async (req, res, next) => {
-  const { role } = req.user;
-  
-  if (role === "Job Seeker") {
-    return next(
-      new ErrorHandler("Job Seeker not allowed to access this resource.", 400)
-    );
+// Feature: Employer Get All Applications
+export const employerGetAllApplications = catchAsyncErrors(
+  async (req, res, next) => {
+    const { role } = req.user;
+    if (role === "Job Seeker") {
+      return next(
+        new ErrorHandler("Job Seeker not allowed to access this resource.", 400)
+      );
+    }
+    const { _id } = req.user;
+    const applications = await Application.find({ "employerID.user": _id });
+    res.status(200).json({
+      success: true,
+      applications,
+    });
   }
-  
-  const { _id } = req.user;
-  
-  const applications = await Application.find({ "employerID.user": _id });
-  
-  res.status(200).json({
-    success: true,
-    applications,
-  });
-});
+);
 
-// Existing function for job seekers to get their applications
-export const jobseekerGetAllApplications = catchAsyncErrors(async (req, res, next) => {
-  const { role } = req.user;
-  
-  if (role === "Employer") {
-    return next(
-      new ErrorHandler("Employer not allowed to access this resource.", 400)
-    );
+// Feature: Jobseeker Get All Applications
+export const jobseekerGetAllApplications = catchAsyncErrors(
+  async (req, res, next) => {
+    const { role } = req.user;
+    if (role === "Employer") {
+      return next(
+        new ErrorHandler("Employer not allowed to access this resource.", 400)
+      );
+    }
+    const { _id } = req.user;
+    const applications = await Application.find({ "applicantID.user": _id });
+    res.status(200).json({
+      success: true,
+      applications,
+    });
   }
-  
-  const { _id } = req.user;
-  
-  const applications = await Application.find({ "applicantID.user": _id });
-  
-  res.status(200).json({
-    success: true,
-    applications,
-  });
-});
+);
 
-// Existing function for job seekers to delete their applications
-export const jobseekerDeleteApplication = catchAsyncErrors(async (req, res, next) => {
-  const { role } = req.user;
-  
-  if (role === "Employer") {
-    return next(
-      new ErrorHandler("Employer not allowed to access this resource.", 400)
-    );
+// Feature: Jobseeker Delete Application
+export const jobseekerDeleteApplication = catchAsyncErrors(
+  async (req, res, next) => {
+    const { role } = req.user;
+    if (role === "Employer") {
+      return next(
+        new ErrorHandler("Employer not allowed to access this resource.", 400)
+      );
+    }
+    const { id } = req.params;
+    const application = await Application.findById(id);
+    if (!application) {
+      return next(new ErrorHandler("Application not found!", 404));
+    }
+    await application.deleteOne();
+    res.status(200).json({
+      success: true,
+      message: "Application Deleted!",
+    });
   }
-  
-  const { id } = req.params;
-  
-  const application = await Application.findById(id);
-  
+);
+
+// Req 6 Feature 1: Update Application Status
+export const updateApplicationStatus = catchAsyncErrors(async (req, res, next) => {
+  const { applicationId, status } = req.body;
+
+  const application = await Application.findById(applicationId);
   if (!application) {
     return next(new ErrorHandler("Application not found!", 404));
   }
-  
-  await application.deleteOne();
-  
+
+  application.status = status;
+  application.notifications.push({
+    message: `Your application status has been updated to "${status}".`,
+  });
+
+  await application.save();
+
   res.status(200).json({
     success: true,
-    message: "Application Deleted!",
+    message: "Application status updated successfully!",
   });
 });
 
-// New function to fetch all applications for a specific user
-export const getApplicationsByUser = async (req, res) => {
-   try {
-     const userId = req.user.id; // Assume user information is available via authentication middleware
-     const applications = await Application.find({ "applicantID.user": userId }).populate("employerID.user", "name email");
-     
-     res.status(200).json({
-       success: true,
-       applications,
-     });
-     
-   } catch (error) {
-     res.status(500).json({
-       success: false,
-       message: error.message,
-     });
-   }
-};
+// Feature 2: Schedule Interview
+export const scheduleInterview = catchAsyncErrors(async (req, res, next) => {
+  const { applicationId, interviewDate } = req.body;
 
-// New function to allow employers to update the application status
-export const updateApplicationStatus = async (req, res) => {
-   try {
-     const { id } = req.params; // Application ID from route params
-     const { status } = req.body; // New status from request body
+  const application = await Application.findById(applicationId);
+  if (!application) {
+    return next(new ErrorHandler("Application not found!", 404));
+  }
 
-     // Validate status
-     if (!["Pending", "Accepted", "Rejected", "Interview Scheduled"].includes(status)) {
-       return res.status(400).json({
-         success: false,
-         message: "Invalid status provided!",
-       });
-     }
+  application.interview.scheduled = true;
+  application.interview.date = interviewDate;
+  application.notifications.push({
+    message: `Your interview has been scheduled for ${new Date(interviewDate).toLocaleString()}.`,
+  });
 
-     const application = await Application.findById(id);
+  await application.save();
 
-     if (!application) {
-       return res.status(404).json({
-         success: false,
-         message: "Application not found!",
-       });
-     }
+  res.status(200).json({
+    success: true,
+    message: "Interview scheduled successfully!",
+  });
+});
 
-     application.status = status;
-     await application.save();
+// Feature 3: Send Follow-Up
+export const sendFollowUp = catchAsyncErrors(async (req, res, next) => {
+  const { applicationId, message } = req.body;
 
-     // Send notification about the status update
-     await sendNotification(application.applicantID.user, `Your application status has been updated to ${status}`);
+  const application = await Application.findById(applicationId);
+  if (!application) {
+    return next(new ErrorHandler("Application not found!", 404));
+  }
 
-     res.status(200).json({
-       success: true,
-       message: "Application status updated successfully!",
-       application,
-     });
-   } catch (error) {
-     res.status(500).json({
-       success: false,
-       message: error.message,
-     });
-   }
-};
+  application.notifications.push({
+    message: `Follow-up: ${message}`,
+  });
 
-// New function to get all applications for the logged-in user
-export const getAllApplications = async (req, res) => {
-   try {
-     const userId = req.user.id; // Assuming req.user contains the logged-in user's details
-     const applications = await Application.find({ applicantID: userId });
+  await application.save();
 
-     res.status(200).json({
-       success: true,
-       applications,
-     });
-   } catch (error) {
-     res.status(500).json({
-       success: false,
-       message: "Failed to fetch applications",
-       error: error.message,
-     });
-   }
-};
+  res.status(200).json({
+    success: true,
+    message: "Follow-up message sent successfully!",
+  });
+});
 
-// New function to get applications by user ID
-export const getApplicationsByUserId = async (req, res) => {
-   try {
-     const { userId } = req.params; // Get userId from request parameters
-     const applications = await Application.find({ applicantID: userId }).populate("jobId", "title");
+// Feature 4: Get Notifications
+export const getNotifications = catchAsyncErrors(async (req, res, next) => {
+  const { _id } = req.user;
 
-     res.status(200).json({ success: true, applications });
-   } catch (error) {
-     res.status(500).json({ success: false, message: error.message });
-   }
-};
+  const applications = await Application.find({ "applicantID.user": _id });
+  const notifications = applications.flatMap((app) => app.notifications);
+
+  res.status(200).json({
+    success: true,
+    notifications,
+  });
+});

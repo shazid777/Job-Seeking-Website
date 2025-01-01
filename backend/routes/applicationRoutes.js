@@ -4,25 +4,24 @@ import {
   jobseekerDeleteApplication,
   jobseekerGetAllApplications,
   postApplication,
-  updateApplicationStatus, // New function
-  getAllApplications,       // New function for job seekers
-  getApplicationsByUserId   // New function to get applications by user ID
+  updateApplicationStatus,
+  scheduleInterview,
+  sendFollowUp,
+  getNotifications,
 } from "../controllers/applicationController.js";
 import { isAuthenticated } from "../middlewares/auth.js";
 
 const router = express.Router();
 
-// Job Seeker Routes
-router.post("/post", isAuthenticated, postApplication); // Route to post an application
-router.get("/jobseeker/getall", isAuthenticated, jobseekerGetAllApplications); // Get all applications for job seekers
-router.get("/applications", isAuthenticated, getAllApplications); // Get all applications for the logged-in user
-router.delete("/delete/:id", isAuthenticated, jobseekerDeleteApplication); // Delete an application
+router.post("/post", isAuthenticated, postApplication);
+router.get("/employer/getall", isAuthenticated, employerGetAllApplications);
+router.get("/jobseeker/getall", isAuthenticated, jobseekerGetAllApplications);
+router.delete("/delete/:id", isAuthenticated, jobseekerDeleteApplication);
 
-// Employer Routes
-router.get("/employer/getall", isAuthenticated, employerGetAllApplications); // Get all applications for employers
-router.patch("/applications/:id/status", isAuthenticated, updateApplicationStatus); // Update application status
-
-// Route to get applications by user ID
-router.get("/:userId", isAuthenticated, getApplicationsByUserId); // Get applications by user ID
+// New routes for 6th Requirement
+router.patch("/update-status", isAuthenticated, updateApplicationStatus);
+router.post("/schedule-interview", isAuthenticated, scheduleInterview);
+router.post("/send-followup", isAuthenticated, sendFollowUp);
+router.get("/notifications", isAuthenticated, getNotifications);
 
 export default router;

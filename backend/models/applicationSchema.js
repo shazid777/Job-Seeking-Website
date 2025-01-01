@@ -1,79 +1,85 @@
 import mongoose from "mongoose";
 import validator from "validator";
 
-const applicationSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: [true, "Please enter your Name!"],
-    minLength: [3, "Name must contain at least 3 Characters!"],
-    maxLength: [30, "Name cannot exceed 30 Characters!"],
-  },
-  email: {
-    type: String,
-    required: [true, "Please enter your Email!"],
-    validate: [validator.isEmail, "Please provide a valid Email!"],
-  },
-  coverLetter: {
-    type: String,
-    required: [true, "Please provide a cover letter!"],
-  },
-  phone: {
-    type: Number,
-    required: [true, "Please enter your Phone Number!"],
-  },
-  address: {
-    type: String,
-    required: [true, "Please enter your Address!"],
-  },
-  resume: {
-    public_id: {
+const applicationSchema = new mongoose.Schema(
+  {
+    name: {
       type: String,
-      required: true,
+      required: [true, "Please enter your Name!"],
+      minLength: [3, "Name must contain at least 3 Characters!"],
+      maxLength: [30, "Name cannot exceed 30 Characters!"],
     },
-    url: {
+    email: {
       type: String,
-      required: true,
+      required: [true, "Please enter your Email!"],
+      validate: [validator.isEmail, "Please provide a valid Email!"],
     },
-  },
-  applicantID: {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    role: {
+    coverLetter: {
       type: String,
-      enum: ["Job Seeker"],
-      required: true,
+      required: [true, "Please provide a cover letter!"],
     },
-  },
-  employerID: {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+    phone: {
+      type: Number,
+      required: [true, "Please enter your Phone Number!"],
     },
-    role: {
+    address: {
       type: String,
-      enum: ["Employer"],
-      required: true,
+      required: [true, "Please enter your Address!"],
     },
+    resume: {
+      public_id: {
+        type: String,
+        required: true,
+      },
+      url: {
+        type: String,
+        required: true,
+      },
+    },
+    applicantID: {
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+      role: {
+        type: String,
+        enum: ["Job Seeker"],
+        required: true,
+      },
+    },
+    employerID: {
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+      role: {
+        type: String,
+        enum: ["Employer"],
+        required: true,
+      },
+    },
+    status: {
+      type: String,
+      enum: ["Applied", "Reviewed", "Shortlisted", "Rejected", "Hired"],
+      default: "Applied",
+    },
+    interview: {
+      scheduled: { type: Boolean, default: false },
+      date: { type: Date },
+    },
+    notifications: [
+      {
+        message: { type: String, required: true },
+        read: { type: Boolean, default: false },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
   },
-  status: {
-    type: String,
-    enum: ["Pending", "Accepted", "Rejected", "Interview Scheduled"],
-    default: "Pending",
-  },
-  jobId: { // Adding jobId field from the second snippet
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Job",
-    required: true, // Assuming jobId is necessary for applications
-  },
-  appliedAt: { // Adding appliedAt field from the second snippet
-    type: Date,
-    default: Date.now,
+  {
+    timestamps: true,
   }
-});
+);
 
-// Exporting the Application model
 export const Application = mongoose.model("Application", applicationSchema);

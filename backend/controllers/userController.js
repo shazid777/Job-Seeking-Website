@@ -2,86 +2,78 @@ import { catchAsyncErrors } from "../middlewares/catchAsyncError.js";
 import { User } from "../models/userSchema.js";
 import ErrorHandler from "../middlewares/error.js";
 import { sendToken } from "../utils/jwtToken.js";
-import bcrypt from 'bcryptjs'; // Import bcrypt for password hashing
-import jwt from 'jsonwebtoken'; // Import jwt for token generation
 
-// Register a new user
 export const register = catchAsyncErrors(async (req, res, next) => {
   const { name, email, phone, password, role } = req.body;
-  
-  // Validate input
+
+  // Check if all required fields are provided
   if (!name || !email || !phone || !password || !role) {
-    return next(new ErrorHandler("Please fill full form!"));
+    return next(new ErrorHandler("Please fill in the complete form!", 400));
   }
-  
-  // Check if email already exists
+
+  // Check if email is already registered
   const isEmail = await User.findOne({ email });
   if (isEmail) {
-    return next(new ErrorHandler("Email already registered!"));
+    return next(new ErrorHandler("Email is already registered!", 409));
   }
-  
-  // Hash the password before saving
-  const hashedPassword = await bcrypt.hash(password, 10);
 
-  // Create new user
+  // Create the user
   const user = await User.create({
     name,
     email,
     phone,
-    password: hashedPassword, // Store hashed password
+    password,
     role,
   });
-  
-  sendToken(user, 201, res, "User Registered!");
+
+  // Send JWT token
+  sendToken(user, 201, res, "User Registered Successfully!");
 });
 
-// Login a user
 export const login = catchAsyncErrors(async (req, res, next) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
 
-  console.log("Request Body:", req.body); // Debug Request Body
-  
-  const user = await User.findOne({ email });
-  
-  console.log("User Found:", user); // Debug User Found
+  // Check if all fields are provided
+  if (!email || !password || !role) {
+    return next(
+      new ErrorHandler("Please provide email, password, and role.", 400)
+    );
+  }
 
+  // Find user by email
+  const user = await User.findOne({ email }).select("+password");
   if (!user) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Email or Password."
-    });
+    return next(new ErrorHandler("Invalid email or password.", 401));
   }
 
-  const isMatch = await bcrypt.compare(password, user.password);
-  
-  console.log("Password Match:", isMatch); // Debug Password Match
-
-  if (!isMatch) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid Email or Password."
-    });
+  // Check if password matches
+  const isPasswordMatched = await user.comparePassword(password);
+  if (!isPasswordMatched) {
+    return next(new ErrorHandler("Invalid email or password.", 401));
   }
 
-  // Generate JWT Token
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET_KEY, {
-    expiresIn: "1h"
-  });
+  // Check if role matches
+  if (user.role !== role) {
+    return next(
+      new ErrorHandler(
+        `User with the provided email does not match the role: ${role}.`,
+        403
+      )
+    );
+  }
 
-  res.status(200).json({
-    success: true,
-    message: "User logged in successfully.",
-    token
-  });
+  // Send JWT token
+  sendToken(user, 200, res, "User Logged In Successfully!");
 });
 
-// Logout a user
 export const logout = catchAsyncErrors(async (req, res, next) => {
   res
     .status(200)
     .cookie("token", "", {
       httpOnly: true,
-      expires: new Date(Date.now()),
+      expires: new Date(Date.now()), // Expire cookie immediately
+      secure: process.env.NODE_ENV === "production", // Secure cookie in production
+      sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax", // SameSite setting
     })
     .json({
       success: true,
@@ -89,12 +81,14 @@ export const logout = catchAsyncErrors(async (req, res, next) => {
     });
 });
 
-// Get the logged-in user's details
 export const getUser = catchAsyncErrors((req, res, next) => {
-  const user = req.user;
-  
+  // Check if user is authenticated
+  if (!req.user) {
+    return next(new ErrorHandler("User not authenticated.", 401));
+  }
+
   res.status(200).json({
     success: true,
-    user,
+    user: req.user,
   });
 });
